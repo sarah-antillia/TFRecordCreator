@@ -34,6 +34,8 @@ Part of tensorflow-view repo: https://github.com/EricThomson/tfrecord-view
 # TFRecordInspector.py
 #
 # 2021/11/05 sarah-antillia
+# 2021/11/08 Added the following method
+#  def save_objects_count(self, objects_count):
 
 # This is for tensorflow 2
 
@@ -60,7 +62,7 @@ class TFRecordInspector:
     
     self.class_labels = {}
     reader = LabelMapReader()
-    self.class_labels, classes, = reader.read(self.label_map_filepath)
+    self.class_labels, self.classes, = reader.read(self.label_map_filepath)
     print("---- class_labels {}".format(self.class_labels))
 
 
@@ -84,13 +86,41 @@ class TFRecordInspector:
       
     return example
 
+  # 2021/11/08 
+  def save_objects_count(self, objects_count):
+    objects_count_dir = os.path.join(self.output_dir, "objects_count")
+    if os.path.exists(objects_count_dir) == False:
+      os.makedirs(objects_count_dir)
+    objects_count_path = os.path.join(objects_count_dir, "objects_count.csv")
+    
+    NL  = "\n"
+    SEP = ","
+    
+    with open(objects_count_path, mode='w') as s:
+              
+      objects_count  = sorted(objects_count.items(), key=lambda x:x[0])
+      # This returns a list
+      print(objects_count)
+      
+      keys  = ""
+      values = ""      
+      for (key,value) in objects_count:
+        keys   = keys   + str(key)   + SEP
+        values = values + str(value) + SEP
 
+      s.write(keys   + NL)
+      s.write(values + NL)
+    print("=== Saved objects_count file {}".format(objects_count_path))
+    
+    
   def extract_images(self):
     dataset = tf.data.TFRecordDataset([self.tfrecord_filepath])
     
     record_iterator = iter(dataset)
     num_records = dataset.reduce(np.int64(0), lambda x, _: x + 1).numpy()
     print("----- Num records {}".format(num_records))
+    
+    objects_count = {}
 
     for im_ind in range(num_records):
         #Parse and process example
@@ -102,7 +132,7 @@ class TFRecordInspector:
           filename = parsed_example['image/filename']
           filename = "{}".format(filename)
           filename = filename.strip('b').strip("'")
-          print("=== filename {}".format(filename))
+          #print("=== filename {}".format(filename))
         except:
           traceback.print_exc()
 
@@ -118,7 +148,7 @@ class TFRecordInspector:
         image_rgb     = cv2.cvtColor(image_copy, cv2.COLOR_BGR2RGB)
         cv_rgb = image_rgb[:, :, ::-1]
         pil_image = Image.fromarray(cv_rgb)
-        print(" --- class_labels {}".format(self.class_labels))
+        #print(" --- class_labels {}".format(self.class_labels))
         draw = ImageDraw.Draw(pil_image)
         pil_font = ImageFont.truetype("arial.ttf", 18)
 
@@ -130,14 +160,20 @@ class TFRecordInspector:
             y2 = np.int64(y2norm * height)
             for bbox_ind in range(num_bboxes):
                     bbox = (x1[bbox_ind], y1[bbox_ind], x2[bbox_ind], y2[bbox_ind])
-                    print("--- labels {}".format(labels))
+                    #print("--- labels {}".format(labels))
                     category = labels[bbox_ind] # -1
-                    print("--- bbox_ind {}".format(bbox_ind))
+                    #print("--- bbox_ind {}".format(bbox_ind))
                     
-                    print("--- category {}".format(category))
+                    #print("--- category {}".format(category))
                     label_name = self.class_labels[category]
-                    #list(class_labels.keys())[list(class_labels.values()).index(labels[bbox_ind])]
                     print("--- category_id {}  label_name {}".format(category, label_name))
+                    
+                    # Store the number of objects into objects_count dict.
+                    if label_name not in objects_count:
+                      objects_count[label_name] = 1
+                    else:
+                      count = int(objects_count[label_name]) +1 
+                      objects_count.update({label_name: count})
                     
                     if self.with_annotation:
                       label_position = (bbox[0] + 5, bbox[1] + 5)
@@ -150,15 +186,23 @@ class TFRecordInspector:
                       
         output_image_file = os.path.join(output_images_dir, filename)
         print("=== Saved image file {}".format(output_image_file))
-        pil_image.save(output_image_file)     
-
+        pil_image.save(output_image_file)
+        
+    self.save_objects_count(objects_count)
+        
+  
 #
-# python TFRecordInspector.py ./tfrecord/sample.tfrecord ./tfrecord/label_map.pbtxt ./output
-# python TFRecordInspector.py ./tfrecord/valid/valid.tfrecord ./label_map.pbtxt ./output/valid
+# python TFRecordInspector.py ./tfrecord/sample.tfrecord ./tfrecord/label_map.pbtxt ./output   [True/False]
+# python TFRecordInspector.py ./tfrecord/valid/valid.tfrecord ./label_map.pbtxt ./output/valid [True/False]
 
 #
 if __name__ == '__main__':
   #tf.disable_eager_execution()
+  tfrecord_file     = ""
+  label_map_pbtxt   = ""
+  output_images_dir = ""
+  with_annotation   = True
+  
   try:
     if len(sys.argv) <4:
       raise Exception("Usage: python TFRecordInsepector.py ./tfrecord/sample.tfrecord ./tfrecord/label_map.pbtxt ./output")
@@ -166,21 +210,27 @@ if __name__ == '__main__':
       tfrecord_file     = sys.argv[1]
       label_map_pbtxt   = sys.argv[2]
       output_images_dir = sys.argv[3]
+    if len(sys.argv) == 5:
+      with_annotation =  eval(sys.argv[4])
 
-      if not os.path.exists(tfrecord_file):
+    if not os.path.exists(tfrecord_file):
         raise Exception(" Not found " + tfrecord_file)
 
-      if not os.path.exists(label_map_pbtxt):
+    if not os.path.exists(label_map_pbtxt):
         raise Exception(" Not found " + label_map_pbtxt)
 
-      if not os.path.exists(output_images_dir):
+    if not os.path.exists(output_images_dir):
         os.makedirs(output_images_dir)
+    print("=== tfrecord_file     {}".format(tfrecord_file))
+    print("=== label_map_pbtxt   {}".format(label_map_pbtxt))
+    print("=== output_images_dir {}".format(output_images_dir))
+    print("=== with_annotation   {}".format(with_annotation))
 
-      inspector = TFRecordInspector(tfrecord_file, 
+    inspector = TFRecordInspector(tfrecord_file, 
                                     label_map_pbtxt, 
                                     output_images_dir, 
-                                    with_annotation=True)
-      inspector.extract_images()
+                                    with_annotation=with_annotation)
+    inspector.extract_images()
       
   except Exception as ex:
     traceback.print_exc()
