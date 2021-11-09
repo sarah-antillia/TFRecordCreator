@@ -6,7 +6,7 @@ TFRecordCreator from other annotations
 Please run the following command on a command line prompt window.<br>
 
 <pre>
->python YOLO2TFRecordCreator.py inpput_images_dir input_yolo_anno_dir output_tfrecor_dir dataset_name
+>python YOLO2TFRecordCreator.py input_images_dir input_yolo_anno_dir output_tfrecor_dir dataset_name
 </pre>
 For example, run the command.<br>
 <pre>
