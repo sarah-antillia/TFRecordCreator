@@ -19,7 +19,7 @@
 
 # LabelMapReader.py
 # 2021/11/05
-#
+# 2022/02/24 Fixed bug in parsing of id and name of label_map.pbtxt file
 
 import os
 import sys
@@ -36,12 +36,14 @@ class LabelMapReader:
     items = {}
     classes = []
     with open(label_map_file, "r") as f:
-        for line in f:
-            line.replace(" ", "")
-            if "id" in line:
+        lines = f.readlines()
+        for line in lines:
+            line = line.strip()
+            print(line)
+            if line.startswith("id:"):
                 id = int(line.split(":")[1].replace(",", "").strip() )
 
-            elif "name" in line:
+            elif line.startswith("name:"):
                 name = line.split(":")[1].replace(",", "").strip()
                 name = name.replace("'", "").replace("\"", "")
 
@@ -67,15 +69,16 @@ if __name__ == "__main__":
 
 
      for i in items:
-       print("i {} name  {}".format(i, items[i]) )
+       print("=== index {} name  {}".format(i, items[i]) )
 
      for i in range(20):
        try:
          class_name = items[i]
-         print("index {}  class {}".format(i, class_name))
+         print("=== index {}  class {}".format(i, class_name))
        except:
          traceback.print_exc()
 
 
   except Exception as ex:
     traceback.print_exc()
+    
